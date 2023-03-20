@@ -1,0 +1,44 @@
+name: milestone PR
+
+on:
+  push:
+    branches:
+      - "milestone/*"
+
+jobs:
+  milestone-pr:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      pr-template: ".temp-pr-template-b0efc35c"
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: 3.1
+      - name: "get the base branch if the PR exists"
+        run: |
+          BASE_BRANCH=$(gh pr view --json baseRefName -q .baseRefName || echo "")
+          echo "baseBranch=${BASE_BRANCH}" >> $GITHUB_ENV
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: "create pr template file"
+        run: |
+          echo "${{ github.ref_name }}" > ./${{ env.pr-template }}
+          echo "" >> ./${{ env.pr-template }}
+          echo "## PRs" >> ./${{ env.pr-template }}
+          echo "<% pull_requests.each do |pr| -%>" >> ./${{ env.pr-template }}
+          echo "  <%= pr.to_checklist_item %>" >> ./${{ env.pr-template }}
+          echo "<% end -%>" >> ./${{ env.pr-template }}
+          # print for debug
+          cat ./${{ env.pr-template }}
+      - run: gem install git-pr-release
+      - run: git-pr-release --no-fetch || true
+        env:
+          GIT_PR_RELEASE_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GIT_PR_RELEASE_TEMPLATE: ${{ env.pr-template }}
+          GIT_PR_RELEASE_BRANCH_STAGING: "${{ github.ref_name }}"
+          GIT_PR_RELEASE_BRANCH_PRODUCTION: "${{ env.baseBranch || 'main' }}"
+          GIT_PR_RELEASE_LABELS: "automated pr, milestone"
